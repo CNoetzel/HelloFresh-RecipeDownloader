@@ -1,4 +1,4 @@
-![logging](doc/hello_download.PNG)
+![project_image](doc/hello_download.png)
 
 # HelloFresh Recipe Downloader
 This small project written in Python allows you to download all the recipes of your recently received [HelloFresh](https://www.hellofresh.de) deliveries.
