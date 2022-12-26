@@ -1,0 +1,12 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Credentials file
+.credentials
+
+# Exclude everything under pdf
+pdf/*
+
+# Exception to the rule
+!pdf/.gitkeep 
