@@ -2,10 +2,16 @@ import requests
 from os import path
 import logger
 import datetime
+import argparse
 
 output_folder = 'pdf'
 hello_fresh_gw_url = 'https://www.hellofresh.com/gw/'
 access_token = None
+
+argParser = argparse.ArgumentParser()
+argParser.add_argument('--similaritySearch', action='store_true',
+                       help='Enables the search for the recipe if it can\'t be downloaded checking your delivery history.')
+argParser.set_defaults(similaritySearch=False)
 
 
 def login():
@@ -22,7 +28,7 @@ headers = {
 }
 
 
-def get_subscription_id():
+def get_customer_data():
     # https://www.hellofresh.com/gw/api/customers/me/subscriptions
     response = requests.get(
         f'{hello_fresh_gw_url}api/customers/me/subscriptions', headers=headers)
@@ -31,8 +37,13 @@ def get_subscription_id():
         logger.error(
             f'Request to retrieve subscription id failed with response: {response.status_code}')
     else:
-        json = response.json()
-        return json.get('items')[0].get('id') if len(json.get('items')) > 0 else None
+        items = response.json().get('items')
+        if items and len(items) > 0:
+            id = items[0].get('id')
+            locale = items[0].get('customer').get('locale')
+            country = locale.split('-')[1] if locale else None
+            return {'id': id, 'locale': locale, 'country': country}
+        return None
 
 
 def get_deliveries_for_week(subscription_id: str, week: str, list_of_recipes: set):
@@ -57,7 +68,7 @@ def get_deliveries_for_week(subscription_id: str, week: str, list_of_recipes: se
             return get_deliveries_for_week(subscription_id, next_week, list_of_recipes)
 
 
-def download_recipe(id):
+def download_recipe(id, country, similaritySearch):
     # https://www.hellofresh.com/gw/recipes/recipes/62bb0448a27aacb4f0071e09
     response = requests.get(
         f'{hello_fresh_gw_url}recipes/recipes/{id}', headers=headers)
@@ -68,12 +79,44 @@ def download_recipe(id):
     else:
         json = response.json()
         title = json.get("name")
-        pdf_link = json.get("cardLink")
-        if not is_already_downloaded(title):
-            download_pdf(title, pdf_link)
-        else:
+        if is_already_downloaded(title):
             logger.info(
                 f'Recipe "{title}" is already present, skipping download ...')
+        else:
+            slug = json.get("slug")
+            ingredients = map(lambda i: i.get('name'), json.get('ingredients'))
+            pdf_link = json.get("cardLink") or (similaritySearch and search_for_recipe(
+                slug, title, ingredients, country))
+            download_pdf(title, pdf_link)
+
+
+def search_for_recipe(slug, title, ingredients, country):
+    # https://www.hellofresh.de/gw/recipes/recipes/search?country=DE&locale=de-DE&q=Mediterraner%20Nudelsalat%20mit%20Halloumi&skip=0&take=16
+    logger.info(
+        f'SimilaritySearch enabled: Searching for recipe with title "{title}"')
+    params = {
+        'take': 20,
+        'country': country,
+        'q': title
+    }
+    response = requests.get(
+        f'{hello_fresh_gw_url}recipes/recipes/search', params=params, headers=headers)
+
+    if not response.ok:
+        logger.error(
+            f'Search for recipe with title "{title}" failed with response: {response.status_code}')
+    else:
+        for recipe in filter(lambda x: recipes_matches(x, slug, ingredients), response.json().get('items')):
+            pdf_link = recipe.get('cardLink')
+            if pdf_link:
+                return pdf_link
+
+
+def recipes_matches(recipe, compare_slug, compare_ingredients):
+    # compare slug to avoid Thermomix recipes and ingredients to find matching recipes
+    recipe_ingredients = map(lambda i: i.get(
+        'name'), recipe.get('ingredients'))
+    return recipe.get('slug') == compare_slug and set(recipe_ingredients) and set(compare_ingredients)
 
 
 def download_pdf(title, pdf_url):
@@ -86,7 +129,7 @@ def download_pdf(title, pdf_url):
                 f'Download for "{title}" failed with response: {response.status_code}')
             return
         else:
-            logger.info(f'Sucessfully downloaded recipe "{title}"')
+            logger.info(f'Successfully downloaded recipe "{title}"')
             with open(f'{output_folder}/{title}.pdf', 'wb') as out:
                 out.write(response.content)
                 out.close()
@@ -99,15 +142,19 @@ def is_already_downloaded(recipe):
 
 
 def main():
-    subscription_id = get_subscription_id()
+    args = argParser.parse_args()
+    c_data = get_customer_data()
+    logger.info(f'Customer data: {c_data}')
     today = datetime.date.today()
-    if subscription_id:
+    if c_data:
         week = f'{today.year}-W{today.strftime("%V")}'
         list_of_recipes = set()
-        get_deliveries_for_week(subscription_id, week, list_of_recipes)
+        get_deliveries_for_week(
+            c_data.get('id'), week, list_of_recipes)
         logger.info(f'Collected {len(list_of_recipes)} recipes ...')
         for recipe_id in list_of_recipes:
-            download_recipe(recipe_id)
+            download_recipe(recipe_id, c_data.get('country'),
+                            args.similaritySearch)
     else:
         logger.error(
             f'Subscription ID not present can not request received deliveries...')

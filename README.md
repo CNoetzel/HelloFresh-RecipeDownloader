@@ -18,7 +18,9 @@ If want to use this project please follow these steps:
  2. Run `pip install -r requirements.txt` to install necessary dependencies.
  3. Create a `.credentials` file in the root directory.
  4. Login on `https://www.hellofresh.de` and copy the `access_token` into the `.credentials` file.
- 5. Run the script `python ./downloader.py`.
+ 5. Run the script.
+    1. Either use `python ./downloader.py` to download exactly the recipes from your history.
+    2. Or execute `python ./downloader.py --similaritySearch` to search for Recipe with **same name and ingredients** in case that the recipe from your history couldn't be downloaded.
  6. The script should log download result into the console as shown below.
 
 ![logging](doc/log.png)
