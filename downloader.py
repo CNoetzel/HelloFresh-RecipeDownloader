@@ -18,7 +18,7 @@ def login():
     global access_token
     if not access_token:
         with open('.credentials', 'r', encoding='utf-8') as cred:
-            access_token = cred.readline()
+            access_token = cred.readline().strip()  # <-- Remove trailing newline
             cred.close
     return access_token
 
