@@ -18,7 +18,7 @@ def login():
     global access_token
     if not access_token:
         with open('.credentials', 'r', encoding='utf-8') as cred:
-            access_token = cred.readline().strip()  # <-- Remove trailing newline
+            access_token = cred.readline().strip()
             cred.close
     return access_token
 
@@ -122,7 +122,7 @@ def recipes_matches(recipe, compare_slug, compare_ingredients):
 def download_pdf(title, pdf_url):
     if pdf_url:
         # https://hellofresh.com/recipecards/card/mini-conchiglie-mit-baconstreifen-und-babyspinat-6360f49afe52da0c720b57e4-88bb96f7.pdf
-        response = requests.get(pdf_url, headers=headers)
+        response = requests.get(pdf_url)
 
         if (not response.ok):
             logger.error(
